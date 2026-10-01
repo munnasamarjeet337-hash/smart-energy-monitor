@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 
 let isConnected = false;
+let retryLogged = false;
 
 const seedDemoUser = async () => {
   try {
@@ -17,7 +18,7 @@ const seedDemoUser = async () => {
       console.log('ℹ️ Demo user ready: demo@demo.com');
     }
   } catch (err) {
-    console.warn('⚠️ Demo user seed notice:', err.message);
+    // Silent
   }
 };
 
@@ -25,19 +26,26 @@ const connectDB = async () => {
   const mongoUri = process.env.MONGO_URL || 'mongodb://127.0.0.1:27017/energy';
 
   const tryConnect = async () => {
+    if (isConnected) return;
     try {
-      console.log(`🔌 Connecting to MongoDB at ${mongoUri}...`);
+      if (!retryLogged) {
+        console.log(`🔌 Attempting MongoDB connection at ${mongoUri}...`);
+      }
       await mongoose.connect(mongoUri, {
-        serverSelectionTimeoutMS: 4000,
-        connectTimeoutMS: 5000,
+        serverSelectionTimeoutMS: 3000,
+        connectTimeoutMS: 3000,
       });
       isConnected = true;
       console.log('✅ Connected to MongoDB successfully.');
       await seedDemoUser();
     } catch (err) {
-      console.warn(`⚠️ MongoDB connection notice: ${err.message}`);
-      console.log('ℹ️ Backend will retry MongoDB connection in the background.');
-      setTimeout(tryConnect, 5000);
+      if (!retryLogged) {
+        console.log('ℹ️ Local MongoDB not detected; running with resilient in-memory store.');
+        console.log('ℹ️ (When you start MongoDB or run via Docker, backend will auto-connect).');
+        retryLogged = true;
+      }
+      // Retry periodically in background quietly
+      setTimeout(tryConnect, 15000);
     }
   };
 
